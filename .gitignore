@@ -1,0 +1,18 @@
+venv/
+__pycache__/
+*.pyc
+models/*.gguf
+models/*.bin
+models/*.safetensors
+tmp/
+.cache/
+# Ignore local models
+models/
+*.gguf
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.pyc
+venv/
