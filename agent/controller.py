@@ -1,84 +1,53 @@
-import json
+# agent/controller.py
+
+from agent.rules import TRIAGE_RULES
 import re
-from model.medgemma import MedGemmaModel
 
 
 class CareOpsAgent:
     def __init__(self):
-        self.model = MedGemmaModel()
+        self.reset()
 
-    def _extract_json(self, text: str):
-        """
-        Extract first valid JSON object from model output.
-        Returns dict or None.
-        """
-        if not text:
-            return None
+    def reset(self):
+        self.history = []
 
-        # Try direct parse first
-        try:
-            return json.loads(text)
-        except Exception:
-            pass
+    def _normalize(self, text: str) -> str:
+        return re.sub(r"[^a-z0-9 ]+", " ", text.lower())
 
-        # Fallback: regex extract JSON block
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            return None
+    def triage(self, text: str) -> dict:
+        text_norm = self._normalize(text)
 
-        try:
-            return json.loads(match.group())
-        except Exception:
-            return None
+        is_baby = any(k in text_norm for k in ["baby", "newborn", "infant"])
+        is_elderly = any(k in text_norm for k in ["elderly", "75 year", "80 year", "senior", "68 year"])
 
-    def triage(self, user_input: str):
-        prompt = f"""
-You are a clinical triage assistant.
+        for rule in TRIAGE_RULES:
+            if any(keyword in text_norm for keyword in rule["keywords"]):
+                risk = rule["risk"]
+                confidence = rule["confidence"]
+                recommendation = rule["recommendation"]
 
-IMPORTANT RULES:
-- Output ONLY valid JSON
-- No explanations
-- No markdown
-- No extra text
+                # AGE-BASED ESCALATION
+                if (is_baby or is_elderly):
+                    if risk == "MODERATE":
+                        risk = "CRITICAL"
+                        confidence = max(confidence, 85)
+                        recommendation = "High-risk patient. Seek emergency medical care immediately."
+                    elif risk == "HIGH":
+                        risk = "CRITICAL"
+                        confidence = max(confidence, 90)
+                        recommendation = "This is a medical emergency. Call emergency services immediately."
 
-TASK:
-If information is insufficient:
-- Ask up to 5 medically relevant follow-up questions
-- status = NEEDS_INFO
-- risk = UNKNOWN
+                return {
+                    "status": "TRIAGED",
+                    "risk": risk,
+                    "confidence": min(confidence, 100),
+                    "recommendation": recommendation
+                }
 
-If information is sufficient:
-- Extract symptoms
-- Classify risk: LOW, MODERATE, HIGH
-- Recommend next action
-- status = TRIAGED
-
-JSON SCHEMA (MANDATORY):
-
-{{
-  "status": "NEEDS_INFO | TRIAGED",
-  "questions": [string],
-  "symptoms": [string],
-  "risk": "LOW | MODERATE | HIGH | UNKNOWN",
-  "recommendation": string
-}}
-
-Patient case:
-{user_input}
-""".strip()
-
-        raw = self.model.generate(prompt)
-        data = self._extract_json(raw)
-
-        if not data:
-            return {
-                "error": True,
-                "message": "Model output could not be parsed",
-                "raw_output": raw
-            }
-
+        # Default fallback
         return {
-            "error": False,
-            "data": data,
-            "raw_output": raw
+            "status": "TRIAGED",
+            "risk": "LOW",
+            "confidence": 25,
+            "recommendation": "Symptoms appear non-urgent. Monitor and seek care if they worsen."
         }

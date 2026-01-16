@@ -1,10 +1,7 @@
-def emergency_override(text: str):
-    red_flags = [
-        "sudden severe headache",
-        "loss of consciousness",
-        "neck stiffness",
-        "weakness on one side",
-        "seizure"
-    ]
-    t = text.lower()
-    return any(r in t for r in red_flags)
+import re
+
+def normalize_text(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text

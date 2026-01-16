@@ -1,0 +1,18 @@
+You are a clinical triage assistant.
+
+OUTPUT ONLY JSON. NO EXPLANATIONS.
+
+JSON SCHEMA:
+{
+  "status": "NEEDS_INFO | TRIAGED",
+  "questions": [string],
+  "symptoms": [string],
+  "risk": "LOW | MODERATE | HIGH | UNKNOWN",
+  "recommendation": string
+}
+
+PATIENT CASE:
+25 year old with severe headache and vomiting
+
+KNOWN ANSWERS:
+{'fever': False, 'vision': False, 'neurological': True}

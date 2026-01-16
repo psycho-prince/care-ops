@@ -1,27 +1,40 @@
-# model/medgemma.py
-import time
+# care-ops/model/medgemma.py
+
+import subprocess
+import tempfile
 from pathlib import Path
 
-IN_PIPE = Path("/data/data/com.termux/files/home/care-ops/in.pipe")
-OUT_PIPE = Path("/data/data/com.termux/files/home/care-ops/out.pipe")
+LLAMA_BIN = Path.home() / "llama.cpp/build/bin/llama-cli"
+MODEL_PATH = Path.home() / "care-ops/models/medgemma.Q4_K_M.gguf"
 
-class MedGemmaModel:
+
+class MedGemma:
     def generate(self, prompt: str) -> str:
-        # send prompt
-        IN_PIPE.write_text(prompt + "\n")
+        """
+        Runs llama-cli once per prompt and returns raw text output.
+        This is intentionally stateless and safe.
+        """
 
-        # read response
-        start = time.time()
-        output = []
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            f.write(prompt)
+            f.flush()
+            prompt_file = f.name
 
-        while time.time() - start < 30:
-            try:
-                chunk = OUT_PIPE.read_text()
-                if chunk.strip():
-                    output.append(chunk)
-                    break
-            except:
-                pass
-            time.sleep(0.2)
-
-        return "".join(output).strip()
+        try:
+            result = subprocess.run(
+                [
+                    str(LLAMA_BIN),
+                    "-m", str(MODEL_PATH),
+                    "--temp", "0.2",
+                    "--top-p", "0.9",
+                    "--n-predict", "512",
+                    "--prompt-file", prompt_file,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=120,
+            )
+            return result.stdout.strip()
+        except Exception:
+            return ""

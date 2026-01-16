@@ -1,41 +1,49 @@
 from agent.controller import CareOpsAgent
 
-agent = CareOpsAgent()
+def main():
+    agent = CareOpsAgent()
 
-print("CARE-OPS · Agentic Triage System (Offline)")
-print("Type a patient case or Ctrl+C to exit\n")
+    print("CARE-OPS · Agentic Triage System (Offline)")
+    print("Type a patient case.")
+    print("Commands: /new  /exit\n")
 
-while True:
-    try:
-        user_input = input("> ").strip()
+    while True:
+        try:
+            user_input = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting CARE-OPS.")
+            break
+
         if not user_input:
+            continue
+
+        if user_input.lower() in ["/exit", "exit", "quit"]:
+            print("Goodbye.")
+            break
+
+        if user_input.lower() == "/new":
+            agent.reset()
+            print("🔄 New patient case started.\n")
             continue
 
         result = agent.triage(user_input)
 
         print("\n--- AGENT OUTPUT ---")
 
-        if result.get("error"):
-            print("⚠️ Model output error. Please rephrase or try again.")
-            print("---------------------\n")
-            continue
-
-        data = result["data"]
-
-        if data["status"] == "NEEDS_INFO":
+        if result["status"] == "NEEDS_INFO":
             print("Status: NEEDS MORE INFORMATION")
-            print("Please answer the following:")
-            for q in data.get("questions", []):
+            for q in result.get("questions", []):
                 print(f"- {q}")
 
+        elif result["status"] == "TRIAGED":
+            print("Status: TRIAGED")
+            print(f"Risk Level: {result.get('risk')} (confidence {result.get('confidence')}%)")
+            print(f"Recommendation: {result.get('recommendation')}")
+
         else:
-            print(f"Status: TRIAGED")
-            print(f"Risk Level: {data.get('risk', 'UNKNOWN')}")
-            print(f"Symptoms: {', '.join(data.get('symptoms', []))}")
-            print(f"Recommended Action: {data.get('recommendation')}")
+            print("⚠️ Unexpected agent state.")
 
         print("---------------------\n")
 
-    except KeyboardInterrupt:
-        print("\nExiting CARE-OPS.")
-        break
+if __name__ == "__main__":
+    main()
