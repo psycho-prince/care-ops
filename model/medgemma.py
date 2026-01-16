@@ -1,19 +1,27 @@
+# model/medgemma.py
 import time
 from pathlib import Path
 
-PROMPT_FILE = Path("/data/data/com.termux/files/home/care-ops/tmp_prompt.txt")
-OUTPUT_FILE = Path("/data/data/com.termux/files/home/care-ops/tmp_output.txt")
+IN_PIPE = Path("/data/data/com.termux/files/home/care-ops/in.pipe")
+OUT_PIPE = Path("/data/data/com.termux/files/home/care-ops/out.pipe")
 
-class MedGemma:
+class MedGemmaModel:
     def generate(self, prompt: str) -> str:
-        PROMPT_FILE.write_text(prompt)
+        # send prompt
+        IN_PIPE.write_text(prompt + "\n")
 
-        # wait for llama-cli to write output
-        for _ in range(60):
-            if OUTPUT_FILE.exists() and OUTPUT_FILE.stat().st_size > 0:
-                text = OUTPUT_FILE.read_text()
-                OUTPUT_FILE.unlink()
-                return text.strip()
-            time.sleep(0.5)
+        # read response
+        start = time.time()
+        output = []
 
-        return ""
+        while time.time() - start < 30:
+            try:
+                chunk = OUT_PIPE.read_text()
+                if chunk.strip():
+                    output.append(chunk)
+                    break
+            except:
+                pass
+            time.sleep(0.2)
+
+        return "".join(output).strip()

@@ -1,85 +1,84 @@
 import json
 import re
-from model.medgemma import MedGemma
+from model.medgemma import MedGemmaModel
 
-SYSTEM_PROMPT = """
-You are a clinical triage assistant.
-
-Rules:
-- Output ONLY valid JSON
-- No markdown
-- No explanations
-- No thoughts
-
-If info is insufficient:
-{
-  "status": "NEEDS_INFO",
-  "questions": [string],
-  "risk": "UNKNOWN"
-}
-
-If info is sufficient:
-{
-  "status": "TRIAGED",
-  "symptoms": [string],
-  "risk": "LOW | MODERATE | HIGH",
-  "recommendation": string
-}
-"""
-
-def extract_json(text: str):
-    if not text:
-        return None
-    m = re.search(r"\{[\s\S]*\}", text)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group())
-    except json.JSONDecodeError:
-        return None
 
 class CareOpsAgent:
     def __init__(self):
-        self.llm = MedGemma()
-        self.context = None
+        self.model = MedGemmaModel()
+
+    def _extract_json(self, text: str):
+        """
+        Extract first valid JSON object from model output.
+        Returns dict or None.
+        """
+        if not text:
+            return None
+
+        # Try direct parse first
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+
+        # Fallback: regex extract JSON block
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return None
+
+        try:
+            return json.loads(match.group())
+        except Exception:
+            return None
 
     def triage(self, user_input: str):
-        if self.context:
-            full_case = f"""
-Original case:
-{self.context}
+        prompt = f"""
+You are a clinical triage assistant.
 
-Additional answers:
-{user_input}
-"""
-        else:
-            full_case = user_input
+IMPORTANT RULES:
+- Output ONLY valid JSON
+- No explanations
+- No markdown
+- No extra text
 
-        prompt = f"""{SYSTEM_PROMPT}
+TASK:
+If information is insufficient:
+- Ask up to 5 medically relevant follow-up questions
+- status = NEEDS_INFO
+- risk = UNKNOWN
+
+If information is sufficient:
+- Extract symptoms
+- Classify risk: LOW, MODERATE, HIGH
+- Recommend next action
+- status = TRIAGED
+
+JSON SCHEMA (MANDATORY):
+
+{{
+  "status": "NEEDS_INFO | TRIAGED",
+  "questions": [string],
+  "symptoms": [string],
+  "risk": "LOW | MODERATE | HIGH | UNKNOWN",
+  "recommendation": string
+}}
 
 Patient case:
-{full_case}
-"""
+{user_input}
+""".strip()
 
-        raw = self.llm.generate(prompt)
-        data = extract_json(raw)
-
-        # retry once with stricter instruction
-        if not data:
-            retry = self.llm.generate(prompt + "\nREMEMBER: OUTPUT JSON ONLY.")
-            data = extract_json(retry)
-            raw = retry
+        raw = self.model.generate(prompt)
+        data = self._extract_json(raw)
 
         if not data:
             return {
                 "error": True,
-                "raw": raw
+                "message": "Model output could not be parsed",
+                "raw_output": raw
             }
 
-        if data["status"] == "NEEDS_INFO":
-            self.context = full_case
-        else:
-            self.context = None
-
-        data["raw"] = raw
-        return data
+        return {
+            "error": False,
+            "data": data,
+            "raw_output": raw
+        }
